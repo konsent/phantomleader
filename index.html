@@ -38,7 +38,7 @@
             position: relative;
             width: 90vw;
             max-width: 850px; /* 데스크탑 카드 크기 확대 */
-            aspect-ratio: 4 / 3;
+            aspect-ratio: 5 / 6; /* 세로 비율을 늘려 박스를 더 길게 만듦 (4/3 -> 5/4) */
             overflow: hidden;
             border-radius: 16px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
@@ -64,7 +64,8 @@
             justify-content: center;
             align-items: center;
             background-color: var(--card-bg-color);
-            padding: 50px; /* 이미지 주위 여백 대폭 추가 */
+            padding: 50px 70px 90px; /* 상단 여백을 줄이고 하단 여백을 늘려 이미지를 위로 이동 */
+            position: relative; /* 자식 absolute 요소의 기준점 역할 */
         }
 
         .slide img {
@@ -110,7 +111,7 @@
         /* --- 페이지 표시기 --- */
         .pagination {
             position: absolute; /* 슬라이더 내부에 위치 */
-            bottom: 15px;
+            bottom: 10px; /* 위치 조정 (20px -> 15px) */
             left: 50%;
             transform: translateX(-50%);
             display: flex;
@@ -146,9 +147,34 @@
             }
             .slider-container {
                 width: 100vw;
-                height: 65vh; /* 슬라이더 크기 증가 */
+                height: 70vh; /* 모바일 슬라이더 높이 증가 (65vh -> 70vh) */
                 border-radius: 0;
             }
+        }
+
+        /* --- 슬라이드 내 바로가기 버튼 --- */
+        .slide-nav-buttons {
+            position: absolute;
+            bottom: 51px; /* 위치를 페이지 표시기 바로 위로 조정 (45px -> 40px) */
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 5; /* 슬라이드 위에, 다른 UI보다는 아래에 위치 */
+        }
+
+        .slide-nav-btn {
+            background-color: rgba(0, 0, 0, 0.4); /* 배경색을 어둡게 변경하여 대비 강화 */
+            color: var(--text-color);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7); /* 텍스트 가독성을 위한 그림자 추가 */
+        }
+        .slide-nav-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
         }
     </style>
 </head>
@@ -182,12 +208,26 @@
             const totalPagesEl = document.getElementById('total-pages');
             const resetBtn = document.getElementById('reset-btn');
 
-            const TOTAL_SLIDES = 30;
+            const TOTAL_SLIDES = 31; // 31번 카드까지 포함하도록 수정
             let currentIndex = 0;
             let isDragging = false;
             let startPos = 0;
             let currentTranslate = 0;
             let prevTranslate = 0;
+
+            // 슬라이드별 바로가기 버튼 정보
+            const slideButtons = {
+                7: [{ text: '26번 카드로 이동', target: 26 }],
+                15: [{ text: '16번 카드로 이동', target: 16 }, { text: '18번 카드로 이동', target: 18 }],
+                17: [{ text: '16번 카드로 이동', target: 16 }],
+                20: [{ text: '18번 카드로 이동', target: 18 }],
+                22: [{ text: '21번 카드로 이동', target: 21 }],
+                23: [{ text: '25번 카드로 이동', target: 25 }],
+                24: [{ text: '14번 카드로 이동', target: 14 }],
+                // 31번 카드가 추가되었으므로 이제 정상적으로 이동 가능합니다.
+                26: [{ text: '31번 카드로 이동', target: 31 }],
+                30: [{ text: '6번 카드로 이동', target: 6 }],
+            };
 
             // 1. 이미지 동적 생성
             function createImageSlides() {
@@ -205,6 +245,24 @@
 
                     slide.appendChild(img);
                     slidesWrapper.appendChild(slide);
+
+                    // 바로가기 버튼 생성
+                    if (slideButtons[i]) {
+                        const buttonContainer = document.createElement('div');
+                        buttonContainer.className = 'slide-nav-buttons';
+
+                        slideButtons[i].forEach(buttonInfo => {
+                            const btn = document.createElement('button');
+                            btn.className = 'slide-nav-btn';
+                            btn.textContent = buttonInfo.text;
+                            btn.addEventListener('click', (e) => {
+                                e.stopPropagation(); // 이벤트 버블링 방지
+                                goToSlide(buttonInfo.target);
+                            });
+                            buttonContainer.appendChild(btn);
+                        });
+                        slide.appendChild(buttonContainer);
+                    }
                 }
                 totalPagesEl.textContent = TOTAL_SLIDES;
                 updateSliderPosition();
@@ -234,6 +292,17 @@
             function showPrevSlide() {
                 if (currentIndex > 0) {
                     currentIndex--;
+                    currentTranslate = -currentIndex * sliderContainer.clientWidth;
+                    setPositionWithAnimation();
+                }
+            }
+
+            // 특정 슬라이드로 이동
+            function goToSlide(pageNumber) {
+                // pageNumber는 1부터 시작. index는 0부터 시작.
+                const targetIndex = pageNumber - 1;
+                if (targetIndex >= 0 && targetIndex < TOTAL_SLIDES && targetIndex !== currentIndex) {
+                    currentIndex = targetIndex;
                     currentTranslate = -currentIndex * sliderContainer.clientWidth;
                     setPositionWithAnimation();
                 }
@@ -316,7 +385,13 @@
             // 마우스 이벤트
             sliderContainer.addEventListener('mousedown', touchStart(0));
             sliderContainer.addEventListener('mouseup', touchEnd);
-            sliderContainer.addEventListener('mouseleave', touchEnd);
+            // 마우스가 컨테이너 밖으로 나갔을 때, 드래그를 취소하고 원래 위치로 복귀
+            sliderContainer.addEventListener('mouseleave', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    setPositionWithAnimation(); // 애니메이션과 함께 원래 위치로 복귀
+                }
+            });
             sliderContainer.addEventListener('mousemove', touchMove);
 
             // 터치 이벤트
